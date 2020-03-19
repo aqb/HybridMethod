@@ -6,12 +6,8 @@
 #include <iostream>
 #include <string.h>
 
-#include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
-#include <opencv2/video/video.hpp>
-
-#include <opencv2/tracking.hpp>
 
 #include <vector>
 
@@ -20,11 +16,9 @@ using namespace cv;
 
 struct ColorJoint {
 	cv::Scalar inputColor;
-	cv::Scalar medColor;
 	cv::Scalar outputColor;
 	cv::Point3f coord;
 	cv::Point3f tempCoord;
-	cv::Point2i centroid;
 	int points;
 };
 
@@ -52,49 +46,10 @@ int        cColorWidth = 1920;
 int        cColorHeight = 1080;
 
 int lh = 5, ls = 15, lv = 15;
-int kernnel =33;
 
 cv::Mat frame1, frame2, frame3, temp;
 FILE *outFile;
 bool startOutput = false;
-
-
-
-// Variaveis para o Filtro de Kalman
-/*KalmanFilter KF(4, 2, 0);
-KF.transitionMatrix = *(Mat_<float>(4, 4) << 1, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1);
-Mat_<float> measurement(2, 1); measurement.setTo(Scalar(0));
-
-// init...
-KF.statePre.at<float>(0) = mouse_info.x;
-KF.statePre.at<float>(1) = mouse_info.y;
-KF.statePre.at<float>(2) = 0;
-KF.statePre.at<float>(3) = 0;
-setIdentity(KF.measurementMatrix);
-setIdentity(KF.processNoiseCov, Scalar::all(1e-4));
-setIdentity(KF.measurementNoiseCov, Scalar::all(1e-1));
-setIdentity(KF.errorCovPost, Scalar::all(.1));
-
-
-// First predict, to update the internal statePre variable
-Mat prediction = KF.predict();
-Point predictPt(prediction.at<float>(0), prediction.at<float>(1));
-
-// Get mouse point
-measurement(0) = mouse_info.x;
-measurement(1) = mouse_info.y;
-
-Point measPt(measurement(0), measurement(1));
-
-// The "correct" phase that is going to use the predicted value and our measurement
-Mat estimated = KF.correct(measurement);
-Point statePt(estimated.at<float>(0), estimated.at<float>(1));
-
-//vector<KalmanFilter> KF;
-
-
-
-double ticks = 0;*/
 
 template<class Interface>
 inline void SafeRelease(Interface *& pInterfaceToRelease)
@@ -133,8 +88,8 @@ bool isSameColorHSV(int rh, int rs, int rv, int h, int s, int v) {
 	
 	//Limiar para HSV
 	//rk = Hue, g = Saturation, b = valeu+
-	//if (abs(rb - r) < 5 && abs(rg - g) < 33 && abs(rr - b) < 47) #Valor do valeu pode ser maior, testar mais isso
-	if (abs(rh - h) < 3 && abs(rs - s) < 20 && abs(rv - v) < 30)
+	//if (abs(rb - r) < 15 && abs(rg - g) < 50 && abs(rr - b) < 50)
+	if (abs(rh - h) < 2 && abs(rs - s) < 16 && abs(rv - v) < 45)
 	{
 		return true;
 	}
@@ -145,25 +100,7 @@ bool isSameColorHSV(int rh, int rs, int rv, int h, int s, int v) {
 	return false;
 }
 
-bool isSameColorBGR(int rb, int rg, int rr, int b, int g, int r) {
-	/*if (abs(rr - r) < COLORDIFFERENCE && abs(rg - g) < COLORDIFFERENCE && abs(rb - b) < COLORDIFFERENCE) {
-		return true;
-	}*/
-	// Limiar em RGB
-	/*if ((abs(rr - r) + abs(rg - g) + abs(rb - b)) / (255.0f * 3) < 0.05) {
-		return true;
-	}*/
-	//Precisa Ajustar limiar
-	if (abs(rb - b) < 15 && abs(rg - g) < 15 && abs(rr - r) < 15)
-	{
-		return true;
-	}
 
-	/*if (rr > 0) {
-		return true;
-	}*/
-	return false;
-}
 //Selecionar Cor
 
 /*void LupaDeCor(int event, int x, int y, int flags, void* userdata) {
@@ -173,25 +110,18 @@ bool isSameColorBGR(int rb, int rg, int rr, int b, int g, int r) {
 	}
 }*/
 
-
-
-
-
-
-
 void CallBackFunc(int event, int x, int y, int flags, void* userdata)
 {
 	if (event == cv::EVENT_RBUTTONDOWN) {
-		cv::Vec3b color2 = frame2.at<cv::Vec3b>(y, x);
-		printf("Cor HSV: %d %d %d\n", color2[0], color2[1], color2[2]);
-		printf("Coordenadas do marcador: (%d,%d)\n", x, y);
+		cv::Vec3b color3 = frame2.at<cv::Vec3b>(y, x);
+		printf("Cor HSV: %d %d %d\n", color3[0], color3[1], color3[2]);
 	}
 	
-	if (event == cv::EVENT_LBUTTONDOWN)
+	if (event == cv::EVENT_LBUTTONDOWN) 
 	{
 		
 		
-		//cv::Vec4b color1 = frame1.at<cv::Vec4b>(y, x);
+
 		cv::Vec3b color2 = frame2.at<cv::Vec3b>(y, x);
 		cv::Scalar outputColor = getColor(colorJoint.size());
 		ColorJoint hd;
@@ -199,30 +129,13 @@ void CallBackFunc(int event, int x, int y, int flags, void* userdata)
 		//printf("%d %d %d -> %d %d %d\n", h, s, v, (int)color2.val[0], (int)color2.val[1], (int)color2.val[2]);
 
 		hd.inputColor[0] = color2.val[0];
-		hd.medColor.val[0] = color2.val[0];
 		hd.inputColor[1] = color2.val[1];
-		hd.medColor.val[1] = color2.val[1];
 		hd.inputColor[2] = color2.val[2];
-		hd.medColor.val[2] = color2.val[2];
-		hd.centroid.x = x;
-		hd.centroid.y = y;
 		printf("Adicionou a cor %d %d %d, em HSV, na lista de marcadores de cor.\n", color2[0], color2[1], color2[2]);
-		// printf("Coordenadas do marcador: (%d,%d)\n", x, y);
-		printf("Coordenadas do marcador: (%d,%d)\n", (int)hd.centroid.x, (int)hd.centroid.y);
 
 		hd.outputColor = outputColor;
 
-		colorJoint.push_back(hd);	
-
-		/*outputColor = getColor(colorJoint.size());
-		
-		hd.inputColor[0] = color1.val[0];
-		hd.inputColor[1] = color1.val[1];
-		hd.inputColor[2] = color1.val[2];
-
-		printf("Adicionou a cor %d %d %d, em RGB, na lista de marcadores de cor.\n", color1[2], color1[1], color1[0]);
-
-		colorJoint.push_back(hd);*/
+		colorJoint.push_back(hd);
 
 		printf("Quantidade de pontos selicionados: %d\n", colorJoint.size());
 
@@ -264,12 +177,13 @@ void updateMarkerPosition() {
 	
 	//printf("%d\n", colorJoint.size());
 
-	cv::cvtColor(frame1, frame2, CV_BGRA2BGR);
-	cv::cvtColor(frame2, frame2, CV_BGR2HSV);
+	//cv::cvtColor(frame1, frame2, CV_BGRA2BGR);
+	//cv::cvtColor(frame2, frame2, CV_BGR2HSV);
 
 
-	//RGBQUAD* pixelsBRG = (RGBQUAD*)frame3.data;
+
 	HSVTRIO* pixelsHSV = (HSVTRIO*)frame2.data;
+	
 	//unsigned char *pixels = frame.data;
 
 	coord3d = cv::Point3f(0,0,0);
@@ -282,84 +196,59 @@ void updateMarkerPosition() {
 		hd.points = 0;
 	}
 
-	for(int i = 0; i < colorJoint.size();i++)
-	{
-		ColorJoint &hd = colorJoint[i];
-		int w = 0;
-		int spixel = 1;
-		//printf("Marcador: %d\n", i);
-		for(int j = (hd.centroid.y - kernnel); j < (hd.centroid.y + kernnel); j++)
-		{
-			//printf("j : %d\t", j);
-			for(int k = (hd.centroid.x - kernnel); k < (hd.centroid.x + kernnel); k++)
-			{
-				//printf("k : %d\t", k);
-				w = j*cColorWidth + k;//indexação vetorial da matriz
-				//printf("w : %d\n",w);
-				if (isSameColorHSV(hd.inputColor[0], hd.inputColor[1], hd.inputColor[2], pixelsHSV[w].hue, pixelsHSV[w].saturation, pixelsHSV[w].value)) {
-				//if (isSameColor(hd.inputColor[0], hd.inputColor[1], hd.inputColor[2], pixels[i*3+0], pixels[i * 3 + 1], pixels[i * 3 + 2])) {
-					//printf("Encontrei a porra da cor!!!!!!\n");
-					hd.medColor.val[0] += (int) pixelsHSV[w].hue;
-					hd.medColor.val[1] += (int) pixelsHSV[w].saturation;
-					hd.medColor.val[2] += (int) pixelsHSV[w].value;
-					spixel++;
-					frame1.at<cv::Vec4b>(j, k) = cv::Vec4b(128, 0, 255, 0);
-					//frame1.at<cv::Vec4b>(i / cColorWidth, i%cColorWidth) = cv::Vec4b(128, 0, 255, 0);
-					//frame2.at<cv::Vec3b>(i / cColorWidth, i%cColorWidth) = cv::Vec3b(pixelsHSV[i].hue, pixelsHSV[i].saturation, pixelsHSV[i].value);
-					if (m_pCameraCoordinates[w].X != -std::numeric_limits<float>::infinity()) {
-						hd.tempCoord.x += m_pCameraCoordinates[w].X;
-						hd.tempCoord.y += m_pCameraCoordinates[w].Y;
-						hd.tempCoord.z += m_pCameraCoordinates[w].Z;
-						hd.points++;
-					}
-				}
-			}
-		}
-		hd.medColor.val[0] = (hd.medColor.val[0] / spixel);
-		hd.medColor.val[1] = (hd.medColor.val[1] / spixel);
-		hd.medColor.val[2] = (hd.medColor.val[2] / spixel);
-		//printf("Valor medio da cor %d %d %d, em HSV, no frame.\n", (int)hd.medColor.val[0], (int)hd.medColor.val[1], (int)hd.medColor.val[2]);
-		hd.inputColor.val[0] = hd.medColor.val[0];
-		hd.inputColor.val[1] = hd.medColor.val[1];
-		hd.inputColor.val[2] = hd.medColor.val[2];
-		//printf("Valor do ponto %f.0 %f.0 %f.0, em HSV, no frame.\n", hd.inputColor.val[0], hd.inputColor.val[1], hd.inputColor.val[2]);
-	}
-	//Parte antiga de identificação de Cor, pixel a pixel into full scream
-	/*for (int i = 0; i < cColorHeight *cColorWidth; i++) {
+	//printf("%d\n", hybridData.size());
+
+	for (int i = 0; i < cColorHeight *cColorWidth; i++) {
 		
 		for (int j = 0; j < colorJoint.size(); j++) {
 			ColorJoint &hd = colorJoint[j];
 			// Valores de entrada são RGB (na verdade é BGR) e HSV, a viavel hd é RGB precisa de conversão algebrica
-			if (isSameColorHSV(hd.inputColor[0], hd.inputColor[1], hd.inputColor[2], pixelsHSV[i].hue, pixelsHSV[i].saturation, pixelsHSV[i].value)) {
-				//if (isSameColor(hd.inputColor[0], hd.inputColor[1], hd.inputColor[2], pixels[i*3+0], pixels[i * 3 + 1], pixels[i * 3 + 2])) {
-				frame1.at<cv::Vec4b>(i / cColorWidth, i%cColorWidth) = cv::Vec4b(128, 0, 255, 0);
-				//frame2.at<cv::Vec3b>(i / cColorWidth, i%cColorWidth) = cv::Vec3b(pixelsHSV[i].hue, pixelsHSV[i].saturation, pixelsHSV[i].value);
-				if (m_pCameraCoordinates[i].X != -std::numeric_limits<float>::infinity()) {
-					hd.tempCoord.x += m_pCameraCoordinates[i].X;
-					hd.tempCoord.y += m_pCameraCoordinates[i].Y;
-					hd.tempCoord.z += m_pCameraCoordinates[i].Z;
-					hd.points++;
-				}
-			}
+			//if (isSameColor(hd.inputColor[0], hd.inputColor[1], hd.inputColor[2], pixels[i].rgbRed, pixels[i].rgbGreen, pixels[i].rgbBlue)) {
+				
+					if (isSameColorHSV(hd.inputColor[0], hd.inputColor[1], hd.inputColor[2], pixelsHSV[i].hue, pixelsHSV[i].saturation, pixelsHSV[i].value)) {
+						//if (isSameColor(hd.inputColor[0], hd.inputColor[1], hd.inputColor[2], pixels[i*3+0], pixels[i * 3 + 1], pixels[i * 3 + 2])) {
 
+						frame1.at<cv::Vec4b>(i / cColorWidth, i%cColorWidth) = cv::Vec4b(128, 0, 255, 0);
+						
+						//frame2.at<cv::Vec3b>(i / cColorWidth, i%cColorWidth) = cv::Vec3b(pixelsHSV[i].hue, pixelsHSV[i].saturation, pixelsHSV[i].value);
+
+						if (m_pCameraCoordinates[i].X != -std::numeric_limits<float>::infinity()) {
+							hd.tempCoord.x += m_pCameraCoordinates[i].X;
+							hd.tempCoord.y += m_pCameraCoordinates[i].Y;
+							hd.tempCoord.z += m_pCameraCoordinates[i].Z;
+							hd.points++;
+						}
+					}
 		}
 		
-	}*/
-	
+		/*float result = (abs(pixels[i].rgbRed - 200) + abs(pixels[i].rgbGreen - 160) + abs(pixels[i].rgbBlue - 60)) / (255.0f * 3);
+		if (result < 0.1) {
+			pixels[i].rgbRed = 255;
+			pixels[i].rgbGreen = 0;
+			pixels[i].rgbBlue = 0;
+
+			if (m_pCameraCoordinates[i].X != -std::numeric_limits<float>::infinity()) {
+
+				coord3d.x += m_pCameraCoordinates[i].X;
+				coord3d.y += m_pCameraCoordinates[i].Y;
+				coord3d.z += m_pCameraCoordinates[i].Z;
+				count++;
+			}
+		}*/
+	}
+
 	for (int j = 0; j < colorJoint.size(); j++) {
 		ColorJoint &cj = colorJoint[j];
 		if (cj.points > 0) {
 			cj.coord.x = cj.tempCoord.x / (float)cj.points;
 			cj.coord.y = cj.tempCoord.y / (float)cj.points;
 			cj.coord.z = cj.tempCoord.z / (float)cj.points;
-			//printf("Novo centroide: (%f,%f) e total e pontos %d\n", cj.coord.x, cj.coord.y,cj.points);
 		}
 		else {
 			cj.coord.x = -std::numeric_limits<float>::infinity();
 			cj.coord.y = -std::numeric_limits<float>::infinity();
 			cj.coord.z = -std::numeric_limits<float>::infinity();
 		}
-		
 	}
 
 	for (int j = 0; j < colorJoint.size(); j++) {
@@ -369,55 +258,20 @@ void updateMarkerPosition() {
 		ctemp.Y = colorJoint[j].coord.y;
 		ctemp.Z = colorJoint[j].coord.z;
 		cv::Point2f algc = BodyToScreen(ctemp, cColorWidth, cColorHeight);
-		if (algc.x == -std::numeric_limits<float>::infinity())
-		{
-			colorJoint[j].centroid.x = colorJoint[j].centroid.x;
-		}
-		else
-		{
-			colorJoint[j].centroid.x = (int)algc.x; 
-		}
-		if (algc.y == -std::numeric_limits<float>::infinity())
-		{
-			colorJoint[j].centroid.y = colorJoint[j].centroid.y;
-		}
-		else
-		{	
-			colorJoint[j].centroid.y = (int)algc.y;
-		}
-		//printf("Coordenadas do marcador: (%d,%d)\n", (int)colorJoint[j].centroid.x, (int)colorJoint[j].centroid.y);
-		cv::circle(frame1, algc, 6, cv::Scalar(0, 0, 255), -1); //era 5 e -1
-		cv::circle(frame1, algc, 4, cv::Scalar(255, 255, 255), -1);
+		cv::circle(frame1, algc, 10, cv::Scalar(0, 0, 255), -1); //era 5 e -1
+		cv::circle(frame1, algc, 5, cv::Scalar(255, 255, 255), -1);
 		cv::circle(frame1, algc, 2, cv::Scalar(0, 0, 255), -1);
-		// printf("%d -- (%d %d)\n", j, colorJoint[j].centroid.x, colorJoint[j].centroid.y);
-
-	}
-	/*for (int j = 1; j < colorJoint.size(); j+=2) {
-		//printf("Devia esta pintando o centroide \n");
-		CameraSpacePoint ctemp;
-		ctemp.X = colorJoint[j].coord.x;
-		ctemp.Y = colorJoint[j].coord.y;
-		ctemp.Z = colorJoint[j].coord.z;
-		cv::Point2f algc = BodyToScreen(ctemp, cColorWidth, cColorHeight);
-	
-		cv::circle(frame3, algc, 10, cv::Scalar(255, 0, 0), -1); //era 5 e -1
-		cv::circle(frame3, algc, 5, cv::Scalar(255, 255, 255), -1);
-		cv::circle(frame3, algc, 2, cv::Scalar(255, 0, 0), -1);
 		//printf("%f %f", algc.x, algc.y);
 
-	}*/
+	}
 }
-
-int contFrame = 0;
 
 void main() {
 
 	outFile = fopen("output.txt", "w");
 	
 	cv::namedWindow("Pontos HSV", 1);
-	//cv::namedWindow("Pontos RGB", 1);
 
-	//cv::setMouseCallback("Pontos RGB", CallBackFunc, NULL);
 	cv::setMouseCallback("Pontos HSV", CallBackFunc, NULL);
 	
 	
@@ -434,7 +288,6 @@ void main() {
 	m_pCameraCoordinates = new CameraSpacePoint[cColorHeight*cColorWidth];
 
 	frame1.create(cColorHeight, cColorWidth, CV_8UC4);
-	//frame3.create(cColorHeight, cColorWidth, CV_8UC4);
 	frame2.create(cColorHeight, cColorWidth, CV_8UC3);
 
 	while (true) {
@@ -503,13 +356,11 @@ void main() {
 					//cv::cvtColor(frame, frame, CV_BGR2BGRA);
 
 					memcpy(frame1.data, pColorBuffer, nColorBufferSize);
-					//memcpy(frame3.data, pColorBuffer, nColorBufferSize);
+
 					cv::cvtColor(frame1, temp, CV_BGRA2BGR);
 					cv::cvtColor(temp, frame2, CV_BGR2HSV);
 
 					updateMarkerPosition();
-					//contFrame++;
-					//printf("frames: %d\n", contFrame);
 
 				}
 
@@ -557,29 +408,33 @@ void main() {
 								cv::circle(frame1, jointPoints[j], 5, cv::Scalar(0, 255, 0), -1);
 							}
 
-							/*for (int j = 0; j < colorJoint.size(); ++j)
+							for (int j = 0; j < colorJoint.size(); ++j)
 							{
 								CameraSpacePoint csp;
 								csp.X = colorJoint[j].coord.x;
 								csp.Y = colorJoint[j].coord.y;
 								csp.Z = colorJoint[j].coord.z;
-								cv::Point2f p2d = BodyToScreen(csp, cColorWidth, cColorHeight);
-								cv::circle(frame1, p2d, 5, cv::Scalar(0, 0, 255), -1);
+								//cv::Point2f p2d = BodyToScreen(csp, cColorWidth, cColorHeight);
+								//cv::circle(frame1, p2d, 5, cv::Scalar(0, 0, 255), -1);
 								//printf(".");
-							}*/
+							}
 							
 							if (startOutput) {
 
-								for (int j = 0; j < _countof(joints); ++j) {
-									if (joints[i].TrackingState == TrackingState_NotTracked) {
+								for (int j = 0; j < _countof(joints); ++j)
+								{
+									if (joints[i].TrackingState == TrackingState_NotTracked) 
+									{
 										fprintf(outFile, "%f %f %f ", -std::numeric_limits<float>::infinity(), -std::numeric_limits<float>::infinity(), -std::numeric_limits<float>::infinity());
 									}
-									else {
+									else 
+									{
 										fprintf(outFile, "%f %f %f ", joints[j].Position.X, joints[j].Position.Y, joints[j].Position.Z);
 									}
 								}
 
-								for (int j = 0; j < colorJoint.size(); j++) {
+								for (int j = 0; j < colorJoint.size(); j++) 
+								{
 									ColorJoint hd = colorJoint[j];
 									fprintf(outFile, "%f %f %f ", hd.coord.x, hd.coord.y, hd.coord.z);
 								}
@@ -599,7 +454,6 @@ void main() {
 		}
 	
 		cv::imshow("Pontos HSV", frame1);
-		//cv::imshow("Pontos RGB", frame3);
 
 		//imshow("test2", frame2);
 		int c = cv::waitKey(10);
@@ -607,11 +461,12 @@ void main() {
 			startOutput = true;
 			string filenameS;
 			cout << "Entre com o nome do arquivo: ";
-				getline(cin,filenameS);
-				const char *filename = filenameS.c_str();;
+			getline(cin, filenameS);
+			const char* filename = filenameS.c_str();;
 			outFile = fopen(filename, "w");
 			printf("\n Gravando\n");
-		} else if (c == 'r') {
+		}
+		else if (c == 'r') {
 			printf("\\\\\\\\\\\\\\\\\\\\\\\System Reset///////////////////\n*\n*\n");
 			colorJoint.clear();
 		}
