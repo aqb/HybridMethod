@@ -228,7 +228,7 @@ void updateMarkerPosition() {
 	}
 
 	//printf("%d\n", hybridData.size());
-	for(int i = 0; i < colorJoint.size();i++)
+	for(int i = 0; i < colorJoint.size();i++) 
 	{
 		ColorJoint &hd = colorJoint[i];
 		int w = 0;
