@@ -170,12 +170,12 @@ void CallBackFunc(int event, int x, int y, int flags, void* userdata)
 		//hd.jointTracker = TrackerKCF::create();
 
 		//{ "BOOSTING", "MIL", "KCF", "TLD", "MEDIANFLOW", "GOTURN", "MOSSE", "CSRT" };
-		hd.jointTracker = createTrackerByName(trackerTypes[4]);
+		hd.jointTracker = createTrackerByName(trackerTypes[2]);
 
 		hd.position = Rect2d((hd.centroid.x - kernnelH), (hd.centroid.y - kernnelH), kernnel, kernnel);
 		rectangle(frame1, hd.position, hd.inputColor, 2, 1);
 		
-		std::cout << trackerTypes[4] << endl;
+		std::cout << trackerTypes[2] << endl;
 
 
 		hd.jointTracker->init(frame1,hd.position);
@@ -268,7 +268,7 @@ void updateMarkerPosition()
 		ColorJoint& hd = colorJoint[i];
 
 		
-		int ok = hd.jointTracker->update(frame1, hd.position);
+		bool ok = hd.jointTracker->update(frame1, hd.position);
 		
 		if (ok)
 		{
